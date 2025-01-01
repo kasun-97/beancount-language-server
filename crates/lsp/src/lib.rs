@@ -56,20 +56,24 @@ pub fn run_server() -> Result<()> {
     }
 
     let config = {
-        let root_file = match initialize_params
-            .root_uri
-            .and_then(|it| it.to_file_path().ok())
-        {
-            Some(it) => it,
-            None => std::env::current_dir()?,
+        let root_file = match initialize_params.workspace_folders {
+            Some(folders) if !folders.is_empty() => {
+                folders[0].uri.to_file_path().map_err(|_| {
+                    // Handle error, maybe log that URI is not a file path
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, "URI is not a file path")
+                })?
+            },
+            _ => std::env::current_dir()?,
         };
         let mut config = Config::new(root_file);
         if let Some(json) = initialize_params.initialization_options {
-            config.update(json).unwrap();
+            config.update(json).map_err(|e| {
+                // Handle error, maybe log the issue with updating config
+                std::io::Error::new(std::io::ErrorKind::Other, e)
+            })?;
         }
         config
     };
-
     main_loop(connection, config)?;
 
     io_threads.join()?;
